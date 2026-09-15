@@ -199,6 +199,7 @@
 </div>
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 /* =====================================================================
@@ -375,36 +376,113 @@ $('#btnList').onclick=()=>{
 };
 
 /* =====================================================================
-   カメラ読み取り（ZXing）
+   カメラ読み取り（zbar-wasm を主、ZXing を予備。自前ループで毎フレーム判定）
    ===================================================================== */
-let reader=null, scanTarget=null;
-function scanFor(id){
-  scanTarget=id;
+let stream=null, scanTarget=null, scanTimer=null, scanning=false, frames=0, camInfo='';
+const cv=document.createElement('canvas'), cx=cv.getContext('2d',{willReadFrequently:true});
+const cv2=document.createElement('canvas'), cx2=cv2.getContext('2d',{willReadFrequently:true});
+const ZBAR_TYPES={ZBAR_CODE128:1,ZBAR_CODE39:1,ZBAR_QRCODE:1,ZBAR_DATABAR:1,ZBAR_I25:1,ZBAR_EAN13:1,ZBAR_CODE93:1};
+let zx=null;
+function zxReader(){
+  if(zx || !window.ZXing) return zx;
+  try{
+    const hints=new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.DATA_MATRIX]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    zx=new ZXing.MultiFormatReader(); zx.setHints(hints);
+  }catch(e){ zx=null; }
+  return zx;
+}
+// ImageData → 文字列 or null（テストからも呼べるように独立させてある）
+let nativeDet=null;
+if('BarcodeDetector' in window){ try{ nativeDet=new BarcodeDetector({formats:['code_128','code_39','qr_code','data_matrix']}); }catch(e){ nativeDet=null; } }
+async function decodeImageData(img){
+  if(nativeDet){
+    try{ const bm=await createImageBitmap(img); const codes=await nativeDet.detect(bm); bm.close&&bm.close();
+      for(const c of codes){ if(c.rawValue && c.rawValue.trim()) return c.rawValue; } }catch(e){ nativeDet=null; }
+  }
+  if(window.zbarWasm){
+    try{
+      const syms=await zbarWasm.scanImageData(img);
+      for(const sy of syms){ const t=sy.decode(); if(t && t.trim()) return t; }
+    }catch(e){}
+  }
+  const r=zxReader();
+  if(r){
+    try{
+      const gray=new Uint8ClampedArray(img.width*img.height), d=img.data;   // ZXingは明るさ配列を渡す
+      for(let i=0;i<gray.length;i++) gray[i]=(d[i*4]*299+d[i*4+1]*587+d[i*4+2]*114)/1000;
+      const src=new ZXing.RGBLuminanceSource(gray, img.width, img.height);
+      const bin=new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));
+      const res=r.decode(bin); if(res) return res.getText();
+    }catch(e){}
+  }
+  return null;
+}
+async function decodeCanvasFrame(video){
+  const vw=video.videoWidth, vh=video.videoHeight;
+  if(!vw||!vh) return null;
+  const scale=Math.min(1, 1600/vw);
+  cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
+  cx.drawImage(video,0,0,cv.width,cv.height);
+  // ① 全体
+  let t=await decodeImageData(cx.getImageData(0,0,cv.width,cv.height));
+  if(t) return t;
+  // ② 枠の帯だけを2倍に拡大して再判定（小さなラベル向け）
+  const y0=Math.round(cv.height*0.34), h=Math.round(cv.height*0.32);
+  cv2.width=cv.width*3; cv2.height=h*3;
+  cx2.imageSmoothingEnabled=true;
+  cx2.drawImage(cv, 0,y0,cv.width,h, 0,0,cv2.width,cv2.height);
+  t=await decodeImageData(cx2.getImageData(0,0,cv2.width,cv2.height));
+  return t;
+}
+async function scanLoop(){
+  if(!scanning) return;
+  const video=$('#video');
+  try{
+    const t=await decodeCanvasFrame(video);
+    frames++;
+    if(t){ onScanned(t); return; }
+    if(frames%8===0) $('#scanMsg').textContent='バーコードを探しています…　枠の幅いっぱいになるまで近づけてください'+(camInfo?'（'+camInfo+'）':'');
+  }catch(e){ $('#scanMsg').textContent='読み取りエラー：'+(e.message||e); }
+  scanTimer=setTimeout(scanLoop, 120);
+}
+async function scanFor(id){
+  scanTarget=id; frames=0;
   $('#scanTitle').textContent = id==='useVin' ? 'VINのバーコードを枠に入れてください' : 'ラベルのバーコードを枠に入れてください';
   $('#scanMsg').textContent='カメラを起動しています…';
   $('#scanner').classList.add('on');
-  if(!window.ZXing){ $('#scanMsg').textContent='読み取り部品を読み込めませんでした。手入力してください。'; return; }
+  if(!window.zbarWasm && !window.ZXing){ $('#scanMsg').textContent='読み取り部品を読み込めませんでした（通信を確認）。手入力してください。'; return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('#scanMsg').textContent='このブラウザではカメラを使えません。Safariで開いてください。'; return; }
   try{
-    const hints=new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    reader=new ZXing.BrowserMultiFormatReader(hints, 300);
-    reader.decodeFromConstraints({audio:false, video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}}, $('#video'),
-      (result, err)=>{
-        if(result){ onScanned(result.getText()); }
-        else if(err && !(err instanceof ZXing.NotFoundException)){ $('#scanMsg').textContent='読み取りエラー：'+err.message; }
-        else $('#scanMsg').textContent='バーコードを探しています…';
-      }).catch(e=>{ $('#scanMsg').textContent='カメラを使えません：'+(e.message||e)+'　（設定→Safari→カメラ を「許可」に）'; });
-  }catch(e){ $('#scanMsg').textContent='カメラを使えません：'+(e.message||e); }
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,
+      video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, advanced:[{focusMode:'continuous'}]}});
+  }catch(e){
+    try{ stream=await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:'environment'}}); }
+    catch(e2){ $('#scanMsg').textContent='カメラを使えません：'+(e2.message||e2)+'　（設定→Safari→カメラ を「許可」に）'; return; }
+  }
+  const video=$('#video'); video.srcObject=stream;
+  try{ await video.play(); }catch(e){}
+  try{
+    const track=stream.getVideoTracks()[0], cap=track.getCapabilities ? track.getCapabilities() : {};
+    if(cap.zoom && cap.zoom.max>1){ await track.applyConstraints({advanced:[{zoom:Math.min(2, cap.zoom.max)}]}); }
+    const st=track.getSettings ? track.getSettings() : {};
+    camInfo = st.width ? `カメラ ${st.width}×${st.height}` : '';
+  }catch(e){}
+  scanning=true; scanLoop();
 }
-function stopScan(){ try{ reader && reader.reset(); }catch(e){} reader=null; $('#scanner').classList.remove('on'); }
+function stopScan(){
+  scanning=false; clearTimeout(scanTimer);
+  try{ stream && stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  stream=null; $('#video').srcObject=null;
+  $('#scanner').classList.remove('on');
+}
 function onScanned(raw){
   const text=String(raw).trim().toUpperCase();
   let val=text;
   if(scanTarget==='useVin'){
     const m=text.replace(/^I/,'').match(VIN_RE);          // VINラベルは先頭に I が付くことがある
-    if(!m){ $('#scanMsg').textContent='VINではないようです：'+text; return; }
+    if(!m){ $('#scanMsg').textContent='VINではないようです：'+text; scanTimer=setTimeout(scanLoop,600); return; }
     val=m[0];
   }else{
     const m=text.match(PART_RE); val=m?m[0]:text;         // 品番の形があれば取り出す
