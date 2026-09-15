@@ -109,12 +109,9 @@
 <section class="page on" id="page-in">
   <div class="card">
     <h2>入荷登録</h2>
-    <p class="lead">ここで保存したものは、あとで「送る」からPCに取り込みます。</p>
+    <p class="lead">ここで保存したものは、あとで「送る」からPCに取り込みます。EPCオーダー番号はPC側で入れます。</p>
     <div class="field"><label>区分<span class="req">必須</span></label>
       <select id="inKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
-    <div class="field" id="wrapInEpc"><label>EPCオーダー番号<span class="req">必須</span></label>
-      <input id="inEpc" class="mono" value="EPC-" autocomplete="off" autocapitalize="characters">
-      <p class="hint">「EPC-」の続きから入力。納品書のバーコードではなく、EPCの注文番号です。</p></div>
     <div class="field"><label>品番<span class="req">必須</span></label>
       <div class="withscan"><input id="inPartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
         <button class="scanbtn" data-scan="inPartNo">📷 読む</button></div>
@@ -134,16 +131,13 @@
 <section class="page" id="page-use">
   <div class="card">
     <h2>使用登録</h2>
-    <p class="lead">ストックオーダー分は使用先VIN（17桁）が必須です。在庫の残数はPC側で確認されます。</p>
+    <p class="lead">ストックオーダー分は使用先VIN（17桁）が必須です。EPC番号と在庫の残数はPC側で扱います。</p>
     <div class="field"><label>区分<span class="req">必須</span></label>
       <select id="useKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
     <div class="field"><label>品番<span class="req">必須</span></label>
       <div class="withscan"><input id="usePartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
         <button class="scanbtn" data-scan="usePartNo">📷 読む</button></div>
       <div class="found" id="useFound"></div></div>
-    <div class="field" id="wrapUseEpc"><label>EPCオーダー番号<span class="opt">分かれば</span></label>
-      <input id="useEpc" class="mono" value="EPC-" autocomplete="off" autocapitalize="characters">
-      <p class="hint">分からなければ「EPC-」のままで可。PC側で入荷記録から選び直せます。</p></div>
     <div class="field"><label>使用先VIN（17桁）<span class="req" id="useVinReq">必須</span></label>
       <div class="withscan"><input id="useVin" class="mono" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="例）LRW3F7ET6TC940861">
         <button class="scanbtn" data-scan="useVin">📷 読む</button></div>
@@ -218,7 +212,6 @@ function toast(m, ng){
   clearTimeout(t._t); t._t=setTimeout(()=>t.className='', 2600);
 }
 function newId(){ DB.seq=(DB.seq||0)+1; return 'M'+Date.now().toString(36)+'-'+DB.seq; }
-const EPC_PREFIX='EPC-';
 const PART_RE=/\d{7}-\d{2}-[A-Z0-9]/;
 const VIN_RE=/[A-HJ-NPR-Z0-9]{17}/;
 
@@ -236,19 +229,6 @@ $('#btnGoSend').onclick=()=> $$('.seg button').find(b=>b.dataset.page==='send').
 /* =====================================================================
    入力の下ごしらえ
    ===================================================================== */
-function epcGuard(el){
-  el.addEventListener('focus', e=>{
-    if(!e.target.value.trim()) e.target.value=EPC_PREFIX;
-    const L=e.target.value.length; setTimeout(()=>e.target.setSelectionRange(L,L),0);
-  });
-  el.addEventListener('input', e=>{
-    const v=e.target.value.trimStart();
-    if(/^epc-/i.test(v)){ if(!v.startsWith(EPC_PREFIX)) e.target.value=EPC_PREFIX+v.slice(4); }
-    else if(!EPC_PREFIX.startsWith(v.toUpperCase())) e.target.value=EPC_PREFIX+v.replace(/^epc-?/i,'');
-  });
-}
-epcGuard($('#inEpc')); epcGuard($('#useEpc'));
-function epcVal(el){ const v=el.value.trim().toUpperCase(); return v===EPC_PREFIX ? '' : v; }
 
 function showFound(partNoId, foundId){
   const no=$('#'+partNoId).value.trim().toUpperCase(), f=$('#'+foundId);
@@ -260,10 +240,8 @@ function showFound(partNoId, foundId){
 }
 $('#inPartNo').addEventListener('input', ()=>showFound('inPartNo','inFound'));
 $('#usePartNo').addEventListener('input', ()=>showFound('usePartNo','useFound'));
-$('#inKind').addEventListener('change', ()=>{ $('#wrapInEpc').style.display=$('#inKind').value==='stock'?'':'none'; });
 $('#useKind').addEventListener('change', ()=>{
-  const st=$('#useKind').value==='stock';
-  $('#wrapUseEpc').style.display=st?'':'none'; $('#useVinReq').style.display=st?'':'none';
+  $('#useVinReq').style.display=$('#useKind').value==='stock'?'':'none';
 });
 $('#useVin').addEventListener('input', e=>{ e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
 $('#inDate').value=todayStr(); $('#useDate').value=todayStr();
@@ -278,13 +256,12 @@ function updatePill(){
 }
 $('#btnIn').onclick=()=>{
   const kind=$('#inKind').value, partNo=$('#inPartNo').value.trim().toUpperCase();
-  const qty=parseInt($('#inQty').value,10), epc=epcVal($('#inEpc'));
+  const qty=parseInt($('#inQty').value,10);
   if(!partNo) return toast('品番を入れてください', true);
   if(!(qty>0)) return toast('数量は1以上です', true);
-  if(kind==='stock' && !epc) return toast('EPCオーダー番号を「EPC-」の続きまで入れてください', true);
   const partName=$('#inPartName').value.trim() || DB.parts[partNo] || '';
   DB.items.push({id:newId(), type:'in', date:$('#inDate').value||todayStr(), kind, partNo, partName, qty,
-    epc: kind==='stock'?epc:'', note:$('#inNote').value.trim(), at:new Date().toISOString()});
+    epc:'', note:$('#inNote').value.trim(), at:new Date().toISOString()});
   save(); updatePill();
   ['#inPartNo','#inPartName','#inNote'].forEach(s=>$(s).value=''); $('#inQty').value=1; $('#inFound').textContent='';
   $('#inPartName').placeholder='新しい品番のときはラベルの品名';
@@ -301,7 +278,7 @@ $('#btnUse').onclick=()=>{
     if(vin.length!==17) return toast('VINは17桁で入れてください', true);
   }
   DB.items.push({id:newId(), type:'use', date:$('#useDate').value||todayStr(), kind, partNo, partName:DB.parts[partNo]||'', qty,
-    epc: kind==='stock'?epcVal($('#useEpc')):'', vin, ro:$('#useRo').value.trim(), model:$('#useModel').value,
+    epc:'', vin, ro:$('#useRo').value.trim(), model:$('#useModel').value,
     note:$('#useNote').value.trim(), at:new Date().toISOString()});
   save(); updatePill();
   ['#usePartNo','#useVin','#useRo','#useNote'].forEach(s=>$(s).value=''); $('#useQty').value=1; $('#useFound').textContent='';
@@ -319,7 +296,7 @@ function renderPend(){
   if(!items.length){ ul.innerHTML='<li><div class="body"><div class="t2">まだ保存したものはありません。</div></div></li>'; return; }
   ul.innerHTML=items.map(i=>{
     const tag=i.sent?'<span class="tag sent">送信済み</span>':(i.type==='in'?'<span class="tag in">入荷</span>':'<span class="tag use">使用</span>');
-    const sub=[i.date, i.kind==='stock'?'ストック':'お客様修理', i.epc||'', i.vin?('VIN '+i.vin):'', i.ro||''].filter(Boolean).join('　');
+    const sub=[i.date, i.kind==='stock'?'ストック':'お客様修理', i.vin?('VIN '+i.vin):'', i.ro||''].filter(Boolean).join('　');
     return `<li class="${i.sent?'sent':''}"><div class="body"><div class="t1">${tag}${esc(i.partNo)} ×${i.qty}${i.partName?'　'+esc(i.partName):''}</div>
       <div class="t2">${esc(sub)}</div></div><button class="del" data-del="${i.id}">削除</button></li>`;
   }).join('');
