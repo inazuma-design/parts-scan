@@ -48,6 +48,9 @@
   .withscan input{flex:1}
   .scanbtn{font:inherit;font-size:15px;font-weight:700;padding:0 14px;border-radius:10px;border:2px solid var(--ink);
     background:var(--bg);color:var(--ink);white-space:nowrap;flex:none}
+  .clearbtn{font:inherit;font-size:18px;font-weight:700;padding:0 12px;border-radius:10px;border:1px solid #c4c9d1;
+    background:var(--bg);color:var(--ink-sub);flex:none;line-height:1}
+  .clearbtn:active{background:var(--bg-soft)}
   .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
   .btn{font:inherit;font-size:18px;font-weight:700;padding:14px 20px;border-radius:10px;width:100%;
     border:2px solid var(--ink);background:var(--ink);color:#fff}
@@ -114,7 +117,8 @@
       <select id="inKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
     <div class="field"><label>品番<span class="req">必須</span></label>
       <div class="withscan"><input id="inPartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
-        <button class="scanbtn" data-scan="inPartNo">📷 読む</button></div>
+        <button class="scanbtn" data-scan="inPartNo">📷 読む</button>
+        <button class="clearbtn" data-clear="inPartNo" aria-label="品番をクリア" title="クリア">✕</button></div>
       <div class="found" id="inFound"></div></div>
     <div class="field"><label>品名<span class="opt">PCに登録済みなら空でOK</span></label>
       <input id="inPartName" autocomplete="off" placeholder="新しい品番のときはラベルの品名"></div>
@@ -136,11 +140,13 @@
       <select id="useKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
     <div class="field"><label>品番<span class="req">必須</span></label>
       <div class="withscan"><input id="usePartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
-        <button class="scanbtn" data-scan="usePartNo">📷 読む</button></div>
+        <button class="scanbtn" data-scan="usePartNo">📷 読む</button>
+        <button class="clearbtn" data-clear="usePartNo" aria-label="品番をクリア" title="クリア">✕</button></div>
       <div class="found" id="useFound"></div></div>
     <div class="field"><label>使用先VIN（17桁）<span class="req" id="useVinReq">必須</span></label>
       <div class="withscan"><input id="useVin" class="mono" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="例）LRW3F7ET6TC940861">
-        <button class="scanbtn" data-scan="useVin">📷 読む</button></div>
+        <button class="scanbtn" data-scan="useVin">📷 読む</button>
+        <button class="clearbtn" data-clear="useVin" aria-label="VINをクリア" title="クリア">✕</button></div>
       <p class="hint">ドア枠やフロントガラスのVINバーコードを読めます。</p></div>
     <div class="two">
       <div class="field"><label>数量<span class="req">必須</span></label><input type="number" inputmode="numeric" id="useQty" min="1" value="1"></div>
@@ -473,6 +479,12 @@ function onScanned(raw){
   if(scanTarget==='useVin'){ $('#useQty').focus(); $('#useQty').select(); }
 }
 $$('[data-scan]').forEach(b=> b.onclick=()=>scanFor(b.dataset.scan));
+// 間違えて読んだときの「✕」：その欄だけ消して、読み直せるようにする
+$$('[data-clear]').forEach(b=> b.onclick=()=>{
+  const el=$('#'+b.dataset.clear); el.value=''; el.dispatchEvent(new Event('input'));
+  if(b.dataset.clear==='inPartNo'){ $('#inPartName').value=''; $('#inPartName').placeholder='新しい品番のときはラベルの品名'; }
+  toast('消しました。もう一度読んでください');
+});
 $('#scanClose').onclick=stopScan;
 
 updatePill(); renderPend(); renderListInfo();
