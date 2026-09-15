@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>パーツ在庫 スマホ登録</title>
+<style>
+  :root{
+    --ink:#1b1b1f; --ink-sub:#5c626e; --line:#e2e5ea;
+    --bg:#ffffff; --bg-soft:#f6f7f9;
+    --accent:#c8102e; --accent-soft:#fdecef;
+    --ok:#1a7f4b; --ok-soft:#e9f6ef;
+    --warn:#a86400; --warn-soft:#fdf3e2;
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:light}
+  body{margin:0;font-family:-apple-system,"Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+    font-size:18px;line-height:1.6;color:var(--ink);background:var(--bg-soft);
+    padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  header{background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px 0;position:sticky;top:0;z-index:20}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  h1{font-size:17px;margin:0;font-weight:700}
+  .pill{font-size:14px;font-weight:700;color:var(--ink-sub);background:var(--bg-soft);border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .pill.has{background:var(--accent);color:#fff}
+  .seg{display:flex;gap:2px;margin-top:8px}
+  .seg button{flex:1;font:inherit;font-size:17px;font-weight:700;padding:12px 6px;border:0;background:none;color:var(--ink-sub);
+    border-bottom:3px solid transparent}
+  .seg button.on{color:var(--ink);border-bottom-color:var(--accent)}
+  main{padding:16px 16px 0;max-width:560px;margin:0 auto}
+  .page{display:none} .page.on{display:block}
+  .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:16px;margin:0 0 4px}
+  .lead{font-size:14px;color:var(--ink-sub);margin:0 0 12px}
+  .field{margin-bottom:14px}
+  label{display:block;font-size:14px;font-weight:700;margin-bottom:5px}
+  label .req{color:var(--accent);font-size:12px;margin-left:4px}
+  label .opt{color:var(--ink-sub);font-size:12px;font-weight:normal;margin-left:6px}
+  input,select,textarea{font:inherit;font-size:18px;width:100%;max-width:100%;min-width:0;padding:11px 12px;
+    border:1px solid #c4c9d1;border-radius:10px;background:var(--bg);color:var(--ink);appearance:none;-webkit-appearance:none}
+  select{background-image:linear-gradient(45deg,transparent 50%,var(--ink-sub) 50%),linear-gradient(135deg,var(--ink-sub) 50%,transparent 50%);
+    background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat;padding-right:36px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:-2px}
+  input[readonly]{background:var(--bg-soft);color:var(--ink-sub)}
+  textarea{min-height:110px;font-size:14px;line-height:1.5}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.02em}
+  .hint{font-size:13px;color:var(--ink-sub);margin-top:5px}
+  .withscan{display:flex;gap:8px}
+  .withscan input{flex:1}
+  .scanbtn{font:inherit;font-size:15px;font-weight:700;padding:0 14px;border-radius:10px;border:2px solid var(--ink);
+    background:var(--bg);color:var(--ink);white-space:nowrap;flex:none}
+  .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+  .btn{font:inherit;font-size:18px;font-weight:700;padding:14px 20px;border-radius:10px;width:100%;
+    border:2px solid var(--ink);background:var(--ink);color:#fff}
+  .btn.sub{background:var(--bg);color:var(--ink)}
+  .btn.ok{background:var(--ok);border-color:var(--ok)}
+  .btn.small{font-size:15px;padding:8px 14px;width:auto}
+  .btn.danger{background:var(--bg);color:var(--accent);border-color:var(--accent)}
+  .btn:disabled{opacity:.4}
+  .found{font-size:15px;color:var(--ok);font-weight:700;margin-top:5px}
+  .found.ng{color:var(--warn)}
+  /* 未送信一覧 */
+  .list{list-style:none;margin:0;padding:0}
+  .list li{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+  .list li:first-child{border-top:0}
+  .list .body{flex:1;min-width:0}
+  .list .t1{font-weight:700;word-break:break-all}
+  .list .t2{font-size:13px;color:var(--ink-sub);word-break:break-all}
+  .list .sent .t1,.list .sent .t2{color:#9aa0aa}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:6px;margin-right:6px;vertical-align:1px}
+  .tag.in{background:var(--ok-soft);color:var(--ok)} .tag.use{background:var(--accent-soft);color:var(--accent)}
+  .tag.sent{background:var(--bg-soft);color:var(--ink-sub)}
+  .del{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink-sub);border-radius:8px;padding:5px 10px;flex:none}
+  /* 下の固定バー */
+  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));z-index:20}
+  .bar .btn{max-width:560px;margin:0 auto;display:block}
+  /* カメラ */
+  #scanner{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column}
+  #scanner.on{display:flex}
+  #scanner video{flex:1;width:100%;object-fit:cover;min-height:0}
+  #scanner .top{color:#fff;padding:14px 16px;font-size:16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;
+    padding-top:calc(14px + env(safe-area-inset-top))}
+  #scanner .top button{font:inherit;font-size:16px;font-weight:700;color:#fff;background:none;border:2px solid #fff;border-radius:8px;padding:6px 14px}
+  #scanner .guide{position:absolute;left:8%;right:8%;top:42%;height:16%;border:3px solid rgba(255,255,255,.85);border-radius:8px;pointer-events:none}
+  #scanner .msg{color:#fff;padding:12px 16px calc(16px + env(safe-area-inset-bottom));font-size:15px;text-align:center;min-height:52px}
+  #toast{position:fixed;left:16px;right:16px;bottom:calc(96px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;
+    padding:12px 16px;border-radius:10px;font-size:16px;font-weight:700;opacity:0;transform:translateY(12px);transition:.2s;z-index:60;pointer-events:none;text-align:center}
+  #toast.on{opacity:1;transform:none} #toast.ng{background:var(--accent)}
+  @media (prefers-reduced-motion:reduce){ #toast{transition:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>パーツ在庫 スマホ登録</h1>
+    <span class="pill" id="pendPill">未送信 0件</span>
+  </div>
+  <div class="seg">
+    <button data-page="in" class="on">入荷</button>
+    <button data-page="use">使用</button>
+    <button data-page="send">送る・設定</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ===== 入荷 ===== -->
+<section class="page on" id="page-in">
+  <div class="card">
+    <h2>入荷登録</h2>
+    <p class="lead">ここで保存したものは、あとで「送る」からPCに取り込みます。</p>
+    <div class="field"><label>区分<span class="req">必須</span></label>
+      <select id="inKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
+    <div class="field" id="wrapInEpc"><label>EPCオーダー番号<span class="req">必須</span></label>
+      <input id="inEpc" class="mono" value="EPC-" autocomplete="off" autocapitalize="characters">
+      <p class="hint">「EPC-」の続きから入力。納品書のバーコードではなく、EPCの注文番号です。</p></div>
+    <div class="field"><label>品番<span class="req">必須</span></label>
+      <div class="withscan"><input id="inPartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
+        <button class="scanbtn" data-scan="inPartNo">📷 読む</button></div>
+      <div class="found" id="inFound"></div></div>
+    <div class="field"><label>品名<span class="opt">PCに登録済みなら空でOK</span></label>
+      <input id="inPartName" autocomplete="off" placeholder="新しい品番のときはラベルの品名"></div>
+    <div class="two">
+      <div class="field"><label>数量<span class="req">必須</span></label><input type="number" inputmode="numeric" id="inQty" min="1" value="1"></div>
+      <div class="field"><label>入荷日</label><input type="date" id="inDate"></div>
+    </div>
+    <div class="field"><label>備考</label><input id="inNote" autocomplete="off"></div>
+    <button class="btn" id="btnIn">入荷を保存する</button>
+  </div>
+</section>
+
+<!-- ===== 使用 ===== -->
+<section class="page" id="page-use">
+  <div class="card">
+    <h2>使用登録</h2>
+    <p class="lead">ストックオーダー分は使用先VIN（17桁）が必須です。在庫の残数はPC側で確認されます。</p>
+    <div class="field"><label>区分<span class="req">必須</span></label>
+      <select id="useKind"><option value="stock">ストックオーダー</option><option value="repair">お客様修理（VIN発注）</option></select></div>
+    <div class="field"><label>品番<span class="req">必須</span></label>
+      <div class="withscan"><input id="usePartNo" class="mono" autocomplete="off" autocapitalize="characters" placeholder="例）1741397-00-D">
+        <button class="scanbtn" data-scan="usePartNo">📷 読む</button></div>
+      <div class="found" id="useFound"></div></div>
+    <div class="field" id="wrapUseEpc"><label>EPCオーダー番号<span class="opt">分かれば</span></label>
+      <input id="useEpc" class="mono" value="EPC-" autocomplete="off" autocapitalize="characters">
+      <p class="hint">分からなければ「EPC-」のままで可。PC側で入荷記録から選び直せます。</p></div>
+    <div class="field"><label>使用先VIN（17桁）<span class="req" id="useVinReq">必須</span></label>
+      <div class="withscan"><input id="useVin" class="mono" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="例）LRW3F7ET6TC940861">
+        <button class="scanbtn" data-scan="useVin">📷 読む</button></div>
+      <p class="hint">ドア枠やフロントガラスのVINバーコードを読めます。</p></div>
+    <div class="two">
+      <div class="field"><label>数量<span class="req">必須</span></label><input type="number" inputmode="numeric" id="useQty" min="1" value="1"></div>
+      <div class="field"><label>使用日</label><input type="date" id="useDate"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label>RO番号<span class="opt">任意</span></label><input id="useRo" class="mono" autocomplete="off" placeholder="RO-260915-01"></div>
+      <div class="field"><label>車種</label>
+        <select id="useModel"><option value="">（未選択）</option><option>Model 3</option><option>Model Y</option><option>YL</option><option>Model S</option><option>Model X</option></select></div>
+    </div>
+    <div class="field"><label>備考</label><input id="useNote" autocomplete="off"></div>
+    <button class="btn" id="btnUse">使用を保存する</button>
+  </div>
+</section>
+
+<!-- ===== 送る・設定 ===== -->
+<section class="page" id="page-send">
+  <div class="card">
+    <h2>PCへ送る</h2>
+    <p class="lead">下の文字をTeamsやメールで自分宛てに送り、PCの「スマホ取り込み」タブに貼り付けます。</p>
+    <ul class="list" id="pendList"></ul>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn small" id="btnShare">共有する</button>
+      <button class="btn small sub" id="btnCopy">文字をコピー</button>
+      <button class="btn small sub" id="btnShowText">文字を表示</button>
+      <button class="btn small danger" id="btnClearSent">送信済みを消す</button>
+    </div>
+    <textarea id="syncText" class="mono" readonly style="display:none;margin-top:12px"></textarea>
+  </div>
+  <div class="card">
+    <h2>PCの品番リスト（任意）</h2>
+    <p class="lead">PCの「スマホ取り込み」タブで「スマホ用の品番リストをコピー」し、ここに貼ると、読んだ品番の品名が表示されます。</p>
+    <textarea id="listText" placeholder="PARTS-LIST-BEGIN … PARTS-LIST-END を貼り付け"></textarea>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <button class="btn small sub" id="btnList">取り込む</button>
+      <span class="hint" id="listInfo" style="margin:0"></span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="bar"><button class="btn" id="btnGoSend">PCへ送る（未送信 0件）</button></div>
+
+<div id="scanner">
+  <div class="top"><span id="scanTitle">バーコードを枠に入れてください</span><button id="scanClose">閉じる</button></div>
+  <video id="video" playsinline muted autoplay></video>
+  <div class="guide"></div>
+  <div class="msg" id="scanMsg">カメラを起動しています…</div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+/* =====================================================================
+   データ（スマホの中だけ）
+   ===================================================================== */
+const KEY='parts-inv-mobile';
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+let DB={items:[], parts:{}, seq:0};
+try{ const s=localStorage.getItem(KEY); if(s) DB=Object.assign(DB, JSON.parse(s)); }catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){} }
+const pad2=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const todayStr=()=>ymd(new Date());
+function toast(m, ng){
+  const t=$('#toast'); t.textContent=m; t.className='on'+(ng?' ng':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='', 2600);
+}
+function newId(){ DB.seq=(DB.seq||0)+1; return 'M'+Date.now().toString(36)+'-'+DB.seq; }
+const EPC_PREFIX='EPC-';
+const PART_RE=/\d{7}-\d{2}-[A-Z0-9]/;
+const VIN_RE=/[A-HJ-NPR-Z0-9]{17}/;
+
+/* =====================================================================
+   画面切り替え
+   ===================================================================== */
+$$('.seg button').forEach(b=> b.onclick=()=>{
+  $$('.seg button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  $$('.page').forEach(p=>p.classList.remove('on')); $('#page-'+b.dataset.page).classList.add('on');
+  if(b.dataset.page==='send') renderPend();
+  window.scrollTo(0,0);
+});
+$('#btnGoSend').onclick=()=> $$('.seg button').find(b=>b.dataset.page==='send').click();
+
+/* =====================================================================
+   入力の下ごしらえ
+   ===================================================================== */
+function epcGuard(el){
+  el.addEventListener('focus', e=>{
+    if(!e.target.value.trim()) e.target.value=EPC_PREFIX;
+    const L=e.target.value.length; setTimeout(()=>e.target.setSelectionRange(L,L),0);
+  });
+  el.addEventListener('input', e=>{
+    const v=e.target.value.trimStart();
+    if(/^epc-/i.test(v)){ if(!v.startsWith(EPC_PREFIX)) e.target.value=EPC_PREFIX+v.slice(4); }
+    else if(!EPC_PREFIX.startsWith(v.toUpperCase())) e.target.value=EPC_PREFIX+v.replace(/^epc-?/i,'');
+  });
+}
+epcGuard($('#inEpc')); epcGuard($('#useEpc'));
+function epcVal(el){ const v=el.value.trim().toUpperCase(); return v===EPC_PREFIX ? '' : v; }
+
+function showFound(partNoId, foundId){
+  const no=$('#'+partNoId).value.trim().toUpperCase(), f=$('#'+foundId);
+  if(!no){ f.textContent=''; return; }
+  const name=DB.parts[no];
+  if(name){ f.className='found'; f.textContent='✓ '+name; if(partNoId==='inPartNo' && !$('#inPartName').value) $('#inPartName').placeholder=name; }
+  else if(Object.keys(DB.parts).length){ f.className='found ng'; f.textContent='PCの品番リストに無い品番です（新しい品番なら品名を入れてください）'; }
+  else f.textContent='';
+}
+$('#inPartNo').addEventListener('input', ()=>showFound('inPartNo','inFound'));
+$('#usePartNo').addEventListener('input', ()=>showFound('usePartNo','useFound'));
+$('#inKind').addEventListener('change', ()=>{ $('#wrapInEpc').style.display=$('#inKind').value==='stock'?'':'none'; });
+$('#useKind').addEventListener('change', ()=>{
+  const st=$('#useKind').value==='stock';
+  $('#wrapUseEpc').style.display=st?'':'none'; $('#useVinReq').style.display=st?'':'none';
+});
+$('#useVin').addEventListener('input', e=>{ e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
+$('#inDate').value=todayStr(); $('#useDate').value=todayStr();
+
+/* =====================================================================
+   保存
+   ===================================================================== */
+function updatePill(){
+  const n=DB.items.filter(i=>!i.sent).length;
+  $('#pendPill').textContent=`未送信 ${n}件`; $('#pendPill').className='pill'+(n?' has':'');
+  $('#btnGoSend').textContent=`PCへ送る（未送信 ${n}件）`;
+}
+$('#btnIn').onclick=()=>{
+  const kind=$('#inKind').value, partNo=$('#inPartNo').value.trim().toUpperCase();
+  const qty=parseInt($('#inQty').value,10), epc=epcVal($('#inEpc'));
+  if(!partNo) return toast('品番を入れてください', true);
+  if(!(qty>0)) return toast('数量は1以上です', true);
+  if(kind==='stock' && !epc) return toast('EPCオーダー番号を「EPC-」の続きまで入れてください', true);
+  const partName=$('#inPartName').value.trim() || DB.parts[partNo] || '';
+  DB.items.push({id:newId(), type:'in', date:$('#inDate').value||todayStr(), kind, partNo, partName, qty,
+    epc: kind==='stock'?epc:'', note:$('#inNote').value.trim(), at:new Date().toISOString()});
+  save(); updatePill();
+  ['#inPartNo','#inPartName','#inNote'].forEach(s=>$(s).value=''); $('#inQty').value=1; $('#inFound').textContent='';
+  $('#inPartName').placeholder='新しい品番のときはラベルの品名';
+  toast(`保存しました（${partName||partNo} ×${qty}）`);
+  $('#inPartNo').focus();
+};
+$('#btnUse').onclick=()=>{
+  const kind=$('#useKind').value, partNo=$('#usePartNo').value.trim().toUpperCase();
+  const qty=parseInt($('#useQty').value,10), vin=$('#useVin').value.trim().toUpperCase();
+  if(!partNo) return toast('品番を入れてください', true);
+  if(!(qty>0)) return toast('数量は1以上です', true);
+  if(kind==='stock'){
+    if(!vin) return toast('ストックオーダー分は使用先VINが必要です', true);
+    if(vin.length!==17) return toast('VINは17桁で入れてください', true);
+  }
+  DB.items.push({id:newId(), type:'use', date:$('#useDate').value||todayStr(), kind, partNo, partName:DB.parts[partNo]||'', qty,
+    epc: kind==='stock'?epcVal($('#useEpc')):'', vin, ro:$('#useRo').value.trim(), model:$('#useModel').value,
+    note:$('#useNote').value.trim(), at:new Date().toISOString()});
+  save(); updatePill();
+  ['#usePartNo','#useVin','#useRo','#useNote'].forEach(s=>$(s).value=''); $('#useQty').value=1; $('#useFound').textContent='';
+  toast(`保存しました（${DB.parts[partNo]||partNo} ×${qty}）`);
+  $('#usePartNo').focus();
+};
+
+/* =====================================================================
+   送る
+   ===================================================================== */
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function renderPend(){
+  const ul=$('#pendList');
+  const items=DB.items.slice().reverse();
+  if(!items.length){ ul.innerHTML='<li><div class="body"><div class="t2">まだ保存したものはありません。</div></div></li>'; return; }
+  ul.innerHTML=items.map(i=>{
+    const tag=i.sent?'<span class="tag sent">送信済み</span>':(i.type==='in'?'<span class="tag in">入荷</span>':'<span class="tag use">使用</span>');
+    const sub=[i.date, i.kind==='stock'?'ストック':'お客様修理', i.epc||'', i.vin?('VIN '+i.vin):'', i.ro||''].filter(Boolean).join('　');
+    return `<li class="${i.sent?'sent':''}"><div class="body"><div class="t1">${tag}${esc(i.partNo)} ×${i.qty}${i.partName?'　'+esc(i.partName):''}</div>
+      <div class="t2">${esc(sub)}</div></div><button class="del" data-del="${i.id}">削除</button></li>`;
+  }).join('');
+  ul.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>{
+    if(!confirm('この1件を消しますか？')) return;
+    DB.items=DB.items.filter(i=>i.id!==b.dataset.del); save(); updatePill(); renderPend();
+  });
+}
+function syncText(){
+  const items=DB.items.filter(i=>!i.sent);
+  const body=JSON.stringify({v:1, from:'iPhone', at:new Date().toISOString(),
+    items: items.map(({sent,...i})=>i)});
+  return `■パーツ在庫 スマホ登録（${items.length}件）\nPARTS-SYNC-BEGIN\n${body}\nPARTS-SYNC-END`;
+}
+function markSent(){
+  const now=new Date().toISOString();
+  DB.items.forEach(i=>{ if(!i.sent) i.sent=now; });
+  save(); updatePill(); renderPend();
+}
+$('#btnShare').onclick=async()=>{
+  const n=DB.items.filter(i=>!i.sent).length;
+  if(!n) return toast('未送信のものがありません', true);
+  const text=syncText();
+  if(navigator.share){
+    try{ await navigator.share({title:'パーツ在庫 スマホ登録', text}); markSent(); toast('送りました。PCで取り込んでください'); }
+    catch(e){ /* キャンセル */ }
+  }else{ $('#btnCopy').click(); }
+};
+$('#btnCopy').onclick=async()=>{
+  const n=DB.items.filter(i=>!i.sent).length;
+  if(!n) return toast('未送信のものがありません', true);
+  const text=syncText();
+  try{ await navigator.clipboard.writeText(text); markSent(); toast('コピーしました。Teamsやメールに貼って自分宛てに送ってください'); }
+  catch(e){ $('#syncText').value=text; $('#syncText').style.display=''; $('#syncText').select(); toast('長押しして全選択→コピーしてください', true); }
+};
+$('#btnShowText').onclick=()=>{
+  const ta=$('#syncText'); ta.value=syncText(); ta.style.display=ta.style.display==='none'?'':'none';
+};
+$('#btnClearSent').onclick=()=>{
+  const n=DB.items.filter(i=>i.sent).length;
+  if(!n) return toast('送信済みのものはありません', true);
+  if(!confirm(`送信済み ${n}件を消します。PCで取り込み済みか確認しましたか？`)) return;
+  DB.items=DB.items.filter(i=>!i.sent); save(); updatePill(); renderPend(); toast('消しました');
+};
+
+/* 品番リスト（PCから） */
+function renderListInfo(){ const n=Object.keys(DB.parts).length; $('#listInfo').textContent=n?`${n}品番を保持しています`:'まだ取り込んでいません'; }
+$('#btnList').onclick=()=>{
+  const m=$('#listText').value.match(/PARTS-LIST-BEGIN\s*([\s\S]*?)\s*PARTS-LIST-END/);
+  if(!m) return toast('PARTS-LIST-BEGIN〜END が見つかりません', true);
+  const parts={};
+  m[1].split(/\r?\n/).forEach(l=>{ const [no,...rest]=l.split('\t'); if(no&&no.trim()) parts[no.trim().toUpperCase()]=rest.join('\t').trim(); });
+  DB.parts=parts; save(); renderListInfo(); $('#listText').value=''; toast(`${Object.keys(parts).length}品番を取り込みました`);
+};
+
+/* =====================================================================
+   カメラ読み取り（ZXing）
+   ===================================================================== */
+let reader=null, scanTarget=null;
+function scanFor(id){
+  scanTarget=id;
+  $('#scanTitle').textContent = id==='useVin' ? 'VINのバーコードを枠に入れてください' : 'ラベルのバーコードを枠に入れてください';
+  $('#scanMsg').textContent='カメラを起動しています…';
+  $('#scanner').classList.add('on');
+  if(!window.ZXing){ $('#scanMsg').textContent='読み取り部品を読み込めませんでした。手入力してください。'; return; }
+  try{
+    const hints=new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    reader=new ZXing.BrowserMultiFormatReader(hints, 300);
+    reader.decodeFromConstraints({audio:false, video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}}, $('#video'),
+      (result, err)=>{
+        if(result){ onScanned(result.getText()); }
+        else if(err && !(err instanceof ZXing.NotFoundException)){ $('#scanMsg').textContent='読み取りエラー：'+err.message; }
+        else $('#scanMsg').textContent='バーコードを探しています…';
+      }).catch(e=>{ $('#scanMsg').textContent='カメラを使えません：'+(e.message||e)+'　（設定→Safari→カメラ を「許可」に）'; });
+  }catch(e){ $('#scanMsg').textContent='カメラを使えません：'+(e.message||e); }
+}
+function stopScan(){ try{ reader && reader.reset(); }catch(e){} reader=null; $('#scanner').classList.remove('on'); }
+function onScanned(raw){
+  const text=String(raw).trim().toUpperCase();
+  let val=text;
+  if(scanTarget==='useVin'){
+    const m=text.replace(/^I/,'').match(VIN_RE);          // VINラベルは先頭に I が付くことがある
+    if(!m){ $('#scanMsg').textContent='VINではないようです：'+text; return; }
+    val=m[0];
+  }else{
+    const m=text.match(PART_RE); val=m?m[0]:text;         // 品番の形があれば取り出す
+  }
+  stopScan();
+  if(navigator.vibrate) navigator.vibrate(60);
+  $('#'+scanTarget).value=val; $('#'+scanTarget).dispatchEvent(new Event('input'));
+  toast('読み取り：'+val);
+  if(scanTarget==='inPartNo'){ $('#inQty').focus(); $('#inQty').select(); }
+  if(scanTarget==='usePartNo'){ if($('#useKind').value==='stock') $('#useVin').focus(); else $('#useQty').focus(); }
+  if(scanTarget==='useVin'){ $('#useQty').focus(); $('#useQty').select(); }
+}
+$$('[data-scan]').forEach(b=> b.onclick=()=>scanFor(b.dataset.scan));
+$('#scanClose').onclick=stopScan;
+
+updatePill(); renderPend(); renderListInfo();
+</script>
+</body>
+</html>
