@@ -54,11 +54,20 @@
   .hint{font-size:13px;color:var(--ink-sub);margin-top:5px}
   .withscan{display:flex;gap:8px}
   .withscan input{flex:1}
+  .withscan.vinrow{flex-wrap:wrap}
+  .withscan.vinrow input{flex:1 1 100%;letter-spacing:0}
+  .withscan.vinrow .scanbtn,.withscan.vinrow .clearbtn{padding-top:9px;padding-bottom:9px}
   .scanbtn{font:inherit;font-size:15px;font-weight:700;padding:0 14px;border-radius:10px;border:2px solid var(--ink);
     background:var(--bg);color:var(--ink);white-space:nowrap;flex:none}
   .clearbtn{font:inherit;font-size:18px;font-weight:700;padding:0 12px;border-radius:10px;border:1px solid #c4c9d1;
     background:var(--bg);color:var(--ink-sub);flex:none;line-height:1}
   .clearbtn:active{background:var(--bg-soft)}
+  .keep{display:inline-block;font-size:12px;font-weight:700;color:var(--ok);background:var(--ok-soft);border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:1px}
+  .recent{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .recent button{font:inherit;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid #c4c9d1;background:var(--bg);color:var(--ink);
+    max-width:100%;text-align:left;line-height:1.3}
+  .recent button small{display:block;color:var(--ink-sub);font-size:12px}
+  .recent button.on{border:2px solid var(--ok);background:var(--ok-soft)}
   .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
   .btn{font:inherit;font-size:18px;font-weight:700;padding:14px 20px;border-radius:10px;width:100%;
     border:2px solid var(--ink);background:var(--ink);color:#fff}
@@ -151,11 +160,12 @@
         <button class="scanbtn" data-scan="usePartNo">📷 読む</button>
         <button class="clearbtn" data-clear="usePartNo" aria-label="品番をクリア" title="クリア">✕</button></div>
       <div class="found" id="useFound"></div></div>
-    <div class="field"><label>使用先VIN（17桁）<span class="req" id="useVinReq">必須</span></label>
-      <div class="withscan"><input id="useVin" class="mono" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="例）LRW3F7ET6TC940861">
+    <div class="field"><label>使用先VIN（17桁）<span class="req" id="useVinReq">必須</span><span class="keep" id="useVinKeep" style="display:none">前回と同じ車両</span></label>
+      <div class="withscan vinrow"><input id="useVin" class="mono" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="例）LRW3F7ET6TC940861">
         <button class="scanbtn" data-scan="useVin">📷 読む</button>
         <button class="clearbtn" data-clear="useVin" aria-label="VINをクリア" title="クリア">✕</button></div>
-      <p class="hint">ドア枠やフロントガラスのVINバーコードを読めます。</p></div>
+      <p class="hint">保存してもVINは残ります。同じ車両なら品番だけ読んで続けて保存。別の車両は ✕ で消して読み直します。</p>
+      <div class="recent" id="recentVins"></div></div>
     <div class="two">
       <div class="field"><label>数量<span class="req">必須</span></label><input type="number" inputmode="numeric" id="useQty" min="1" value="1"></div>
       <div class="field"><label>使用日</label><input type="date" id="useDate"></div>
@@ -294,11 +304,46 @@ $('#btnUse').onclick=()=>{
   DB.items.push({id:newId(), type:'use', date:$('#useDate').value||todayStr(), kind, partNo, partName:DB.parts[partNo]||'', qty,
     epc:'', vin, ro:$('#useRo').value.trim(), model:$('#useModel').value,
     note:$('#useNote').value.trim(), at:new Date().toISOString()});
+  if(vin) rememberVin(vin, $('#useRo').value.trim(), $('#useModel').value);
   save(); updatePill();
-  ['#usePartNo','#useVin','#useRo','#useNote'].forEach(s=>$(s).value=''); $('#useQty').value=1; $('#useFound').textContent='';
-  toast(`保存しました（${DB.parts[partNo]||partNo} ×${qty}）`);
+  // 同じ車両に続けて使うことが多いので、VIN・RO番号・車種は残す
+  ['#usePartNo','#useNote'].forEach(s=>$(s).value=''); $('#useQty').value=1; $('#useFound').textContent='';
+  vinKept = vin;
+  renderVinUi();
+  toast(`保存しました（${DB.parts[partNo]||partNo} ×${qty}）${vin?'　VINはそのまま':''}`);
   $('#usePartNo').focus();
 };
+
+/* ---- 同じVINの続け入力 ---- */
+let vinKept='';
+function rememberVin(vin, ro, model){
+  DB.recentVins = (DB.recentVins||[]).filter(v=>v.vin!==vin);
+  DB.recentVins.unshift({vin, ro, model, at:new Date().toISOString()});
+  DB.recentVins = DB.recentVins.slice(0,5);
+  try{ localStorage.setItem(KEY+'-lastUse', JSON.stringify({vin, ro, model})); }catch(e){}
+}
+function renderVinUi(){
+  const cur=$('#useVin').value.trim().toUpperCase();
+  $('#useVinKeep').style.display = (cur && cur===vinKept) ? '' : 'none';
+  const list=(DB.recentVins||[]);
+  $('#recentVins').innerHTML = list.length ? list.map(v=>
+    `<button type="button" data-vin="${esc(v.vin)}" class="${v.vin===cur?'on':''}">${esc(v.vin)}<small>${esc([v.model, v.ro].filter(Boolean).join('　')||'最近のVIN')}</small></button>`).join('') : '';
+  $$('#recentVins [data-vin]').forEach(b=> b.onclick=()=>{
+    const v=(DB.recentVins||[]).find(x=>x.vin===b.dataset.vin); if(!v) return;
+    $('#useVin').value=v.vin;
+    if(v.ro!==undefined) $('#useRo').value=v.ro||'';
+    if(v.model!==undefined) $('#useModel').value=v.model||'';
+    vinKept=v.vin; renderVinUi();
+    toast('VINを入れました：'+v.vin);
+    if(!$('#usePartNo').value.trim()) $('#usePartNo').focus(); else { $('#useQty').focus(); $('#useQty').select(); }
+  });
+}
+$('#useVin').addEventListener('input', renderVinUi);
+// 開き直しても、前回のVIN・RO番号・車種を戻す
+try{
+  const last=JSON.parse(localStorage.getItem(KEY+'-lastUse')||'null');
+  if(last && last.vin && !$('#useVin').value){ $('#useVin').value=last.vin; $('#useRo').value=last.ro||''; $('#useModel').value=last.model||''; vinKept=last.vin; }
+}catch(e){}
 
 /* =====================================================================
    送る
@@ -483,19 +528,23 @@ function onScanned(raw){
   $('#'+scanTarget).value=val; $('#'+scanTarget).dispatchEvent(new Event('input'));
   toast('読み取り：'+val);
   if(scanTarget==='inPartNo'){ $('#inQty').focus(); $('#inQty').select(); }
-  if(scanTarget==='usePartNo'){ if($('#useKind').value==='stock') $('#useVin').focus(); else $('#useQty').focus(); }
-  if(scanTarget==='useVin'){ $('#useQty').focus(); $('#useQty').select(); }
+  if(scanTarget==='usePartNo'){
+    const hasVin=$('#useVin').value.trim().length===17;
+    if($('#useKind').value==='stock' && !hasVin) $('#useVin').focus(); else { $('#useQty').focus(); $('#useQty').select(); }
+  }
+  if(scanTarget==='useVin'){ vinKept=''; renderVinUi(); $('#useQty').focus(); $('#useQty').select(); }
 }
 $$('[data-scan]').forEach(b=> b.onclick=()=>scanFor(b.dataset.scan));
 // 間違えて読んだときの「✕」：その欄だけ消して、読み直せるようにする
 $$('[data-clear]').forEach(b=> b.onclick=()=>{
   const el=$('#'+b.dataset.clear); el.value=''; el.dispatchEvent(new Event('input'));
   if(b.dataset.clear==='inPartNo'){ $('#inPartName').value=''; $('#inPartName').placeholder='新しい品番のときはラベルの品名'; }
+  if(b.dataset.clear==='useVin'){ $('#useRo').value=''; $('#useModel').value=''; vinKept=''; try{ localStorage.removeItem(KEY+'-lastUse'); }catch(e){} renderVinUi(); }
   toast('消しました。もう一度読んでください');
 });
 $('#scanClose').onclick=stopScan;
 
-updatePill(); renderPend(); renderListInfo();
+updatePill(); renderPend(); renderListInfo(); renderVinUi();
 </script>
 </body>
 </html>
